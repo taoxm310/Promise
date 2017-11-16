@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>promise</title>
+</head>
+<body>
+	
+</body>
+<script>
+// https://developers.google.com/web/fundamentals/getting-started/primers/promises
+	function get(url){
+		return new Promise( function (resolve,reject){
+			var req = new XMLHttpRequest()
+			req.open('GET', url)
+
+			req.onload = function(){
+
+				if(req.status == 200){
+					resolve(req.response)
+				} else {
+					//处理响应错误
+					reject(new Error(req.statusText))
+				}
+			}
+				//网络错误
+			req.onerror = function(){
+				reject(Error('Network Error'))
+			}
+
+			req.send()
+		})
+	}
+
+	// get('story.json').then(function(response) {
+	//   console.log("Success!", response);
+	// }, function(error) {
+	//   console.error("Failed!", error);
+	// })
+
+	function getJSON(url){
+		return get(url).then(JSON.parse)
+	}
+
+	//只下载一次story.json
+	var storyPromise;
+
+	function get Chapter(i){
+		storyPromise = storyPromise || getJSON('story.json')
+		//下一次调用时候，赋值前一次的结果，所以只下载了一次
+		return storyPromise.then(function(story){
+			//获取对应章节的内容
+			return getJSON(story.chapterUrls[i]);
+
+		})
+	}
+
+	getChapter(0).then(function(chapter){
+		console.log(chapter)
+		return	getChapter(1)
+	}).then(function(chapter){
+		console.log(chapter)
+	})
+
+
+			getJSON('story.json').then(function(story) {
+			  addHtmlToPage(story.heading);
+
+			  	//下方实现都是嵌入在这里的
+
+			  // TODO: for each url in story.chapterUrls, fetch &amp; display
+			}).then(function() {
+			  // And we're all done!
+			  addTextToPage("All done");
+			}).catch(function(err) {
+			  // Catch any error that happened along the way
+			  addTextToPage("Argh, broken: " + err.message);
+			}).then(function() {
+			  // Always hide the spinner
+			  document.querySelector('.spinner').style.display = 'none';
+			})
+
+	//依次下载，下载完显示
+	var sequence = Promise.resolve()
+
+	sotry.chapterUrls.forEach(function(chapterUrl){
+		sequence = sequence.then(function(){
+
+			return getJSON(chapterUrl)
+
+		}).then(function(chapter){
+
+			addHtmlToPage(chapter.html)
+		})
+	})
+
+	//用reduce实现
+	story.chapterUrls.reduce(function(sequence, chapterUrl){
+
+		return sequence.then(function(){
+
+			return getJSON(chapterUrl)
+
+		}).then(function(chapter){
+
+			addHtmlToPage(chapter.html)
+		})
+	}, Promise.resolve())
+
+	// 同时下载,等所有内容都成功之后再按章节顺序显示
+	
+	getJSON('story.json').then(function(story) {
+	  addHtmlToPage(story.heading);
+
+	  return Promise.all(
+	  //数组中的所有promise都成功之后才会进入下一步
+	   story.chapterUrls.map(getJSON)
+	  );
+	})
+	.then(function(chapters) { //chapters 是一个数组
+	 
+	  chapters.forEach(function(chapter) {
+	 
+	    addHtmlToPage(chapter.html);
+	  });
+	  addTextToPage("All done");
+	}).catch(function(err) {
+	  // catch any error that happened so far
+	  addTextToPage("Argh, broken: " + err.message);
+	}).then(function() {
+	  document.querySelector('.spinner').style.display = 'none';
+	})
+
+	
+	//同时下载，单个下载完成且在响应的顺序位置上即添加到网页
+	
+	getJSON('story.json').then(function(story) {
+	  addHtmlToPage(story.heading);
+	  //同时开始下载，未完成
+	  return story.chapterUrls.map(getJSON)
+	    .reduce(function(sequence, chapterPromise) {
+
+	      return sequence.then(function() {
+	        //等待之前sequence完成后调用
+	        return chapterPromise;
+	      }).then(function(chapter) {
+	        addHtmlToPage(chapter.html);
+	      });
+
+	    }, Promise.resolve());
+
+	}).then(function() {
+	  addTextToPage("All done");
+	}).catch(function(err) {
+	  // catch any error that happened along the way
+	  addTextToPage("Argh, broken: " + err.message);
+	}).then(function() {
+	  document.querySelector('.spinner').style.display = 'none';
+	})
+
+//Promise.resolve、Promise.reject、Promise.all、Promise.race
+	Promise.resolve = function(value){
+		return new Promise(function(resolve){
+			resolve(value)
+		})
+	}
+
+	Promise.reject = functio(reason){
+		return new Promise(function(_,reject){
+			reject(reason)
+		})
+	}
+
+	//all也要返回一个promise
+	Promise.all = function(promises){
+		return new Promise(function(resolve,reject){
+			var result = []
+			var count = 0
+
+			for(let i = 0; i < promises.length;i++){
+				promises[i].then( function(value){
+					result[i] = value
+					count++
+					if(count === promises.length){
+						resolve(result)
+					}
+				},function(reason){
+					reject(reason)
+				})
+			}
+			
+		})
+	}
+
+	Promise.race = function(promises){
+		return new Promise(resolve,reject){
+			for(let i = 0; i < promises.length;i++){
+				promises[i].then(function(value){
+					resolve(value)
+				}, function(reason){
+					reject(reason)
+				})
+			}
+		}
+	}
+
+// WhenReady
+
+
+	var whenReady = (function(){
+		var domReadyPromise = new Promise(function(resolve){
+			document.addEventListener('DOMContentLoaded',function(){
+				resolve()
+			})
+			document.addEventListener('readystatechange',function(){
+				if(document.readystate === 'complete'){
+					resolve()
+				}
+			})
+			document.addEventListener('load',function(){
+				resolve()
+			})
+
+		})
+
+		 return function whenReady(f) {
+	   		domReadyPromise.then(f)
+	  	}
+	}())
+
+// generator函数和promise
+
+	function* gen(){
+		console.log(1)
+		var a = yield Promise.resolve(1)
+		console.log(a)
+		var b = yield Promise.resolve(2)
+		console.log(b)
+	}
+
+	function run(genFn){
+		var iteratee = genfn();
+		(function x(val){
+			var gened = iteratee.next(val)
+			if(!gened.value){
+				gened.value.then(x)
+			}
+		}())
+	}
+	
+	function run(genFn){
+		iter.next(value).value.then(x)
+	}
+// run（极简POC代码）更详细版本
+	function run(g){
+		return new Promise(function(resolve,reject){
+			let iter = g()
+			x()
+			function x(val){
+				var gened = iter.next(val)
+				if(gened.done){
+					resolve(gened.val)
+				} else {				
+					//判断yield后面是不是gennerator函数
+					if(gened.value instance of Function){
+						gened.value(x)
+					} else {
+						gened.value.then(x,y)
+					}
+				}
+			}
+
+			function y(reason){
+				var gened = iter.throw(reason)
+				if(gened.done){
+					resolve(gened.val)
+				} else {
+					if(gened.value instance of Function){
+						gened.value(x)
+					} else {
+						gened.value.then(x,y)
+					}
+				}
+			}
+			
+		})
+	}
+	
+// 异步函数 
+
+	async function f() {
+	  console.log(1)
+	  var imgs = await Promise.all([p1, p2, p3, p4])
+	  var a = await new Promise(resolve => {
+	    setTimeout(function() {
+	      resolve(2)
+	    }, 3000)
+	  })
+	  var a = await new Promise(resolve => {
+	    setTimeout(function() {
+	      resolve(2)
+	    }, 3000) 
+	  })
+	  var a = await new Promise(resolve => {
+	    setTimeout(function() {
+	      resolve(2)
+	    }, 3000)
+	  })
+	  var a = await new Promise(resolve => {
+	    setTimeout(function() {
+	      resolve(2)
+	    }, 3000)
+	  })
+	  console.log(a)
+	}
+	f()
+	console.log(3)
+
+//
+</script>
+</html>
